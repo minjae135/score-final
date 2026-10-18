@@ -61,6 +61,14 @@ export const SEMESTERS: Array<{
   { key: '3-2', label: '3학년 2학기', weight: 7.2 }
 ];
 
+const FORECAST_FALLBACKS: Record<SemesterKey, SemesterKey[]> = {
+  '1-2': ['2-2', '2-1', '3-2', '3-1'],
+  '2-1': ['2-2', '3-1', '3-2', '1-2'],
+  '2-2': ['2-1', '3-2', '3-1', '1-2'],
+  '3-1': ['3-2', '2-1', '2-2', '1-2'],
+  '3-2': ['3-1', '2-2', '2-1', '1-2']
+};
+
 export function scoreGeneralRaw(rawScore: number): number {
   if (!Number.isFinite(rawScore) || rawScore < 0 || rawScore > 100) {
     throw new Error('일반교과 원점수는 0~100 사이여야 합니다.');
@@ -123,7 +131,7 @@ export function calculateSemesterAverage(semester: SemesterInput): {
   const label = getSemesterLabel(semester.key);
 
   if (semester.mode === 'forecast') {
-    return { errors: [{ field: `${semester.key}.forecast`, message: `${label} 예상에 사용할 이전 학기 성적을 입력해 주세요.` }] };
+    return { errors: [{ field: `${semester.key}.forecast`, message: `${label}을(를) 대체할 입력 완료 학기 성적이 없습니다.` }] };
   }
 
   if (semester.mode === 'average') {
@@ -170,22 +178,17 @@ export function calculateSemesterAverage(semester: SemesterInput): {
 
 export function calculateForecast(semesters: SemesterInput[], targetKey: SemesterKey): {
   averageScore?: number;
-  sourceCount: number;
+  sourceKey?: SemesterKey;
 } {
-  const targetIndex = SEMESTERS.findIndex((semester) => semester.key === targetKey);
-  const averages: number[] = [];
-  SEMESTERS.slice(0, targetIndex).forEach((config) => {
-    const semester = semesters.find((item) => item.key === config.key);
-    if (!semester || semester.mode === 'forecast') return;
+  for (const sourceKey of FORECAST_FALLBACKS[targetKey]) {
+    const semester = semesters.find((item) => item.key === sourceKey);
+    if (!semester || semester.mode === 'forecast') continue;
     const result = calculateSemesterAverage(semester);
     if (result.errors.length === 0 && result.averageScore !== undefined) {
-      averages.push(result.averageScore);
+      return { averageScore: result.averageScore, sourceKey };
     }
-  });
-  return {
-    averageScore: averages.length ? averages.reduce((sum, average) => sum + average, 0) / averages.length : undefined,
-    sourceCount: averages.length
-  };
+  }
+  return {};
 }
 
 export function calculateFinalScore(semesters: SemesterInput[]): ScoringOutcome {

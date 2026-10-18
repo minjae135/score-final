@@ -83,6 +83,8 @@ function render(): void {
       </section>
       <p class="file-status" data-file-status role="status" aria-live="polite"></p>
 
+      ${renderForecastRules()}
+
       <div data-results>
         ${renderSummary()}
         ${renderErrors(outcome.errors.map((error) => error.message))}
@@ -167,6 +169,30 @@ function renderErrors(errors: string[]): string {
   `;
 }
 
+function renderForecastRules(): string {
+  return `
+    <details class="forecast-rules">
+      <summary>성적이 없는 학기 대체 기준</summary>
+      <div class="forecast-rules-content">
+        <table>
+          <thead><tr><th>성적이 없는 학기·학년</th><th>대체 학기</th></tr></thead>
+          <tbody>
+            <tr><td>1학기</td><td>같은 학년 2학기</td></tr>
+            <tr><td>2학기</td><td>같은 학년 1학기</td></tr>
+            <tr><td>1학년</td><td>2학년 1학기 → 1학년 1학기<br />2학년 2학기 → 1학년 2학기</td></tr>
+            <tr><td>2학년</td><td>3학년 1학기 → 2학년 1학기<br />3학년 2학기 → 2학년 2학기</td></tr>
+            <tr><td>3학년</td><td>2학년 1학기 → 3학년 1학기<br />2학년 2학기 → 3학년 2학기</td></tr>
+            <tr><td>1·2학년</td><td>3학년 1학기 → 1·2학년 1학기<br />3학년 2학기 → 1·2학년 2학기</td></tr>
+            <tr><td>1·3학년</td><td>2학년 1학기 → 1·3학년 1학기<br />2학년 2학기 → 1·3학년 2학기</td></tr>
+            <tr><td>2·3학년</td><td>1학년 1학기 → 2·3학년 1학기<br />1학년 2학기 → 2·3학년 2학기</td></tr>
+          </tbody>
+        </table>
+        <p>대체 학기에도 입력된 성적이 없으면 1·2학기 대체 규칙을 따라 다른 입력 완료 학기를 찾습니다. 예상으로 지정한 학기는 대체 기준으로 사용하지 않습니다. 계산기에 없는 1학년 1학기 성적은 같은 학년 2학기(1학년 2학기) 성적으로 대체합니다.</p>
+      </div>
+    </details>
+  `;
+}
+
 function renderSemester(semester: SemesterInput): string {
   const config = SEMESTERS.find((item) => item.key === semester.key);
   const label = config?.label ?? semester.key;
@@ -206,9 +232,10 @@ function renderSemester(semester: SemesterInput): string {
 
 function renderForecastValue(semester: SemesterInput): string {
   const forecast = calculateForecast(state, semester.key);
+  const source = SEMESTERS.find((item) => item.key === forecast.sourceKey);
   return forecast.averageScore === undefined
-    ? '예상 기준 없음 · 이전 학기 성적 필요'
-    : `예상 평균 환산점수 ${forecast.averageScore.toFixed(3)} · 이전 ${forecast.sourceCount}개 입력 완료 학기의 단순 평균`;
+    ? '대체할 입력 완료 학기 성적이 없습니다.'
+    : `예상 평균 환산점수 ${forecast.averageScore.toFixed(3)} · 대체 학기: ${source?.label ?? forecast.sourceKey}`;
 }
 
 function renderModeButton(semester: SemesterInput, mode: SemesterInputMode, label: string): string {

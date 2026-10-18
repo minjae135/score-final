@@ -172,6 +172,39 @@ main {
   color: var(--warn);
 }
 
+.forecast-rules {
+  border-top: 1px solid var(--line);
+  border-bottom: 1px solid var(--line);
+  padding: 12px 0;
+}
+
+.forecast-rules summary {
+  color: var(--accent-dark);
+  cursor: pointer;
+  font-weight: 800;
+}
+
+.forecast-rules-content {
+  margin-top: 10px;
+  overflow-x: auto;
+}
+
+.forecast-rules td,
+.forecast-rules th {
+  white-space: normal;
+  vertical-align: top;
+}
+
+.forecast-rules td:first-child {
+  white-space: nowrap;
+}
+
+.forecast-rules-content p {
+  margin: 10px 0 0;
+  color: var(--muted);
+  line-height: 1.5;
+}
+
 .summary-grid {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
