@@ -47,7 +47,7 @@ npm run build
 npm test
 ```
 
-빌드 결과는 `dist/`에 생성됩니다. GitHub Pages에 배포하려면 GitHub Actions에서 이 빌드를 실행하고 `dist/`를 게시하도록 설정해야 합니다.
+빌드 결과는 `dist/`에 생성됩니다. `.github/workflows/pages.yml`이 기본 브랜치(`main` 또는 `master`)에 푸시될 때 빌드하고 GitHub Pages에 자동 배포합니다. 저장소 Settings의 Pages에서 배포 원본을 `GitHub Actions`로 설정해 주세요.
 
 ## 성적 파일
 
