@@ -1,7 +1,7 @@
 import { SEMESTERS, SemesterInput, SubjectInput } from './scoring';
 
 const FILE_FORMAT = 'middle-school-score';
-const FILE_VERSION = 1;
+const FILE_VERSION = 2;
 
 export function serializeScores(semesters: SemesterInput[]): string {
   return JSON.stringify({
@@ -14,17 +14,21 @@ export function serializeScores(semesters: SemesterInput[]): string {
 
 export function parseScores(text: string): SemesterInput[] {
   const data: unknown = JSON.parse(text.replace(/^\uFEFF/, ''));
-  if (!isRecord(data) || data.format !== FILE_FORMAT || data.version !== FILE_VERSION ||
-      !Array.isArray(data.semesters) || data.semesters.length !== SEMESTERS.length) {
+  if (!isRecord(data) || data.format !== FILE_FORMAT ||
+      (data.version !== 1 && data.version !== FILE_VERSION) || !Array.isArray(data.semesters) ||
+      (data.version === 1 ? data.semesters.length !== SEMESTERS.length - 1 : data.semesters.length !== SEMESTERS.length)) {
     throw new Error('이 계산기에서 저장한 성적 파일을 선택해 주세요.');
   }
 
-  const semesters = data.semesters;
+  const semesters = data.version === 1
+    ? [{ key: '1-1', mode: 'free', subjects: [] }, ...data.semesters]
+    : data.semesters;
   return SEMESTERS.map((config) => {
     const matches = semesters.filter((item: unknown) => isRecord(item) && item.key === config.key);
     const semester: unknown = matches[0];
     if (matches.length !== 1 || !isRecord(semester) ||
-        (semester.mode !== 'subjects' && semester.mode !== 'average' && semester.mode !== 'forecast') ||
+        (semester.mode !== 'subjects' && semester.mode !== 'average' && semester.mode !== 'forecast' &&
+          !(config.key === '1-1' && semester.mode === 'free')) ||
         !isOptionalNumber(semester.averageScore) || !Array.isArray(semester.subjects)) {
       throw new Error(`${config.label} 저장 정보를 확인해 주세요.`);
     }

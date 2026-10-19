@@ -2,8 +2,8 @@ export type Achievement = 'A' | 'B' | 'C' | 'D' | 'E';
 export type ArtsAchievement = Extract<Achievement, 'A' | 'B' | 'C'>;
 export type SubjectCategory = 'general' | 'arts';
 export type InputMode = 'raw' | 'achievement';
-export type SemesterInputMode = 'subjects' | 'average' | 'forecast';
-export type SemesterKey = '1-2' | '2-1' | '2-2' | '3-1' | '3-2';
+export type SemesterInputMode = 'subjects' | 'average' | 'forecast' | 'free';
+export type SemesterKey = '1-1' | '1-2' | '2-1' | '2-2' | '3-1' | '3-2';
 
 export interface SubjectInput {
   id: string;
@@ -54,6 +54,7 @@ export const SEMESTERS: Array<{
   label: string;
   weight: number;
 }> = [
+  { key: '1-1', label: '1학년 1학기', weight: 0 },
   { key: '1-2', label: '1학년 2학기', weight: 2.88 },
   { key: '2-1', label: '2학년 1학기', weight: 5.76 },
   { key: '2-2', label: '2학년 2학기', weight: 5.76 },
@@ -62,11 +63,12 @@ export const SEMESTERS: Array<{
 ];
 
 const FORECAST_FALLBACKS: Record<SemesterKey, SemesterKey[]> = {
-  '1-2': ['2-2', '2-1', '3-2', '3-1'],
-  '2-1': ['2-2', '3-1', '3-2', '1-2'],
-  '2-2': ['2-1', '3-2', '3-1', '1-2'],
-  '3-1': ['3-2', '2-1', '2-2', '1-2'],
-  '3-2': ['3-1', '2-2', '2-1', '1-2']
+  '1-1': ['1-2', '2-1', '2-2', '3-1', '3-2'],
+  '1-2': ['2-2', '2-1', '3-2', '3-1', '1-1'],
+  '2-1': ['2-2', '3-1', '3-2', '1-1', '1-2'],
+  '2-2': ['2-1', '3-2', '3-1', '1-2', '1-1'],
+  '3-1': ['3-2', '2-1', '2-2', '1-1', '1-2'],
+  '3-2': ['3-1', '2-2', '2-1', '1-2', '1-1']
 };
 
 export function scoreGeneralRaw(rawScore: number): number {
@@ -129,6 +131,10 @@ export function calculateSemesterAverage(semester: SemesterInput): {
   errors: ScoringError[];
 } {
   const label = getSemesterLabel(semester.key);
+
+  if (semester.mode === 'free') {
+    return { errors: [] };
+  }
 
   if (semester.mode === 'forecast') {
     return { errors: [{ field: `${semester.key}.forecast`, message: `${label}을(를) 대체할 입력 완료 학기 성적이 없습니다.` }] };
@@ -196,7 +202,7 @@ export function calculateFinalScore(semesters: SemesterInput[]): ScoringOutcome 
   const errors: ScoringError[] = [];
   const semesterResults: SemesterResult[] = [];
 
-  SEMESTERS.forEach((config) => {
+  SEMESTERS.filter((config) => config.weight > 0).forEach((config) => {
     const semester = byKey.get(config.key);
     if (!semester) {
       errors.push({ field: config.key, message: `${config.label} 입력 정보가 없습니다.` });

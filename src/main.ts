@@ -35,7 +35,7 @@ let state: SemesterInput[] = createDefaultState();
 function createDefaultState(): SemesterInput[] {
   return SEMESTERS.map((semester) => ({
     key: semester.key,
-    mode: 'subjects',
+    mode: semester.key === '1-1' ? 'free' : 'subjects',
     subjects: DEFAULT_SUBJECTS[semester.key[0]].map((name) => createSubject({
       name,
       category: ARTS_SUBJECTS.has(name) ? 'arts' : 'general',
@@ -67,7 +67,7 @@ function render(): void {
         <h1>중학교 교과성적 환산 점수 계산기</h1>
       </div>
       <div class="score-panel ${result ? 'is-ready' : ''}">
-        <span>${state.some((semester) => semester.mode === 'forecast') ? '예상 최종 점수' : '최종 점수'}</span>
+        <span>${state.some((semester) => semester.key !== '1-1' && semester.mode === 'forecast') ? '예상 최종 점수' : '최종 점수'}</span>
         <strong>${result ? result.finalScore.toFixed(3) : '--.---'}</strong>
       </div>
     </header>
@@ -187,7 +187,7 @@ function renderForecastRules(): string {
             <tr><td>2·3학년</td><td>1학년 1학기 → 2·3학년 1학기<br />1학년 2학기 → 2·3학년 2학기</td></tr>
           </tbody>
         </table>
-        <p>대체 학기에도 입력된 성적이 없으면 1·2학기 대체 규칙을 따라 다른 입력 완료 학기를 찾습니다. 예상으로 지정한 학기는 대체 기준으로 사용하지 않습니다. 계산기에 없는 1학년 1학기 성적은 같은 학년 2학기(1학년 2학기) 성적으로 대체합니다.</p>
+        <p>대체 학기에도 입력된 성적이 없으면 1·2학기 대체 규칙을 따라 다른 입력 완료 학기를 찾습니다. 예상 학기와 자유학기는 대체 기준으로 사용하지 않습니다. 1학년 1학기는 자유학기 상태에서는 환산 점수에 반영되지 않으며, 성적이 있다면 과목별 또는 평균 입력으로 바꿔 대체 성적으로 사용할 수 있습니다.</p>
       </div>
     </details>
   `;
@@ -205,11 +205,14 @@ function renderSemester(semester: SemesterInput): string {
           ${renderModeButton(semester, 'subjects', '과목별')}
           ${renderModeButton(semester, 'average', '평균')}
           ${renderModeButton(semester, 'forecast', '예상')}
+          ${semester.key === '1-1' ? renderModeButton(semester, 'free', '자유학기') : ''}
         </div>
       </div>
 
       ${
-        semester.mode === 'forecast'
+        semester.mode === 'free'
+          ? '<p class="free-semester-note">자유학기 성적은 환산 점수에 반영되지 않습니다.</p>'
+          : semester.mode === 'forecast'
           ? `<div class="forecast-value" data-forecast="${semester.key}">${renderForecastValue(semester)}</div>`
           : semester.mode === 'average'
           ? renderAverageMode(semester)
@@ -396,7 +399,7 @@ function updateResults(): void {
   }
   const scoreLabel = scorePanel?.querySelector('span');
   if (scoreLabel) {
-    scoreLabel.textContent = state.some((semester) => semester.mode === 'forecast') ? '예상 최종 점수' : '최종 점수';
+    scoreLabel.textContent = state.some((semester) => semester.key !== '1-1' && semester.mode === 'forecast') ? '예상 최종 점수' : '최종 점수';
   }
   appRoot.querySelectorAll<HTMLElement>('[data-forecast]').forEach((element) => {
     const semester = state.find((item) => item.key === element.dataset.forecast);
@@ -617,6 +620,7 @@ function setFileStatus(message: string, isError = false): void {
 function fillExample(): void {
   state = createDefaultState();
   state.forEach((semester) => {
+    if (semester.mode === 'free') return;
     semester.subjects.forEach((subject, index) => {
       if (subject.category === 'arts') {
         subject.achievement = index % 2 === 0 ? 'A' : 'B';

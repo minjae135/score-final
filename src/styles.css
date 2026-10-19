@@ -294,6 +294,10 @@ tbody tr:last-child td {
   background: var(--soft);
 }
 
+.semester[data-semester='1-1'] .mode-toggle {
+  grid-template-columns: repeat(4, minmax(64px, 1fr));
+}
+
 .mode-toggle button {
   min-height: 34px;
   border: 0;
@@ -356,6 +360,12 @@ tbody tr:last-child td {
   color: var(--accent-dark);
   line-height: 1.6;
   overflow-wrap: anywhere;
+}
+
+.free-semester-note {
+  margin: 0;
+  color: var(--muted);
+  line-height: 1.6;
 }
 
 @media (max-width: 820px) {
