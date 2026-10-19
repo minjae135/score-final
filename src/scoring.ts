@@ -48,6 +48,19 @@ export interface ScoringOutcome {
 }
 
 export const BASE_SCORE = 96;
+export const ATTENDANCE_MAX_SCORE = 21;
+export const ATTENDANCE_MIN_SCORE = 12;
+export const AUTONOMOUS_ACTIVITY_MAX_SCORE = 12;
+export const CLUB_ACTIVITY_MAX_SCORE = 12;
+export const VOLUNTEER_ACTIVITY_MAX_SCORE = 15;
+
+export function calculateAttendanceScore(unexcusedAbsenceDays: number): number {
+  if (!Number.isInteger(unexcusedAbsenceDays) || unexcusedAbsenceDays < 0) {
+    throw new Error('미인정 결석 일수는 0 이상의 정수여야 합니다.');
+  }
+
+  return Math.max(ATTENDANCE_MIN_SCORE, ATTENDANCE_MAX_SCORE - Math.ceil(unexcusedAbsenceDays / 2));
+}
 
 export const SEMESTERS: Array<{
   key: SemesterKey;

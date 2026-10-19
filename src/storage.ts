@@ -1,29 +1,63 @@
 import { SEMESTERS, SemesterInput, SubjectInput } from './scoring';
 
 const FILE_FORMAT = 'middle-school-score';
-const FILE_VERSION = 2;
+const FILE_VERSION = 7;
 
-export function serializeScores(semesters: SemesterInput[]): string {
+export type GradeActivityScores = [number, number, number];
+export type AutonomousActivityScores = GradeActivityScores;
+export type ClubActivityScores = GradeActivityScores;
+export type VolunteerActivityScores = [number | undefined, number | undefined, number | undefined];
+export type VolunteerActivityBonuses = [boolean, boolean, boolean];
+
+export interface ParsedScoreFile {
+  semesters: SemesterInput[];
+  unexcusedAbsenceDays?: number;
+  autonomousActivityScores: AutonomousActivityScores;
+  clubActivityScores: ClubActivityScores;
+  volunteerActivityScores: VolunteerActivityScores;
+  volunteerActivityBonuses: VolunteerActivityBonuses;
+}
+
+export function serializeScores(
+  semesters: SemesterInput[],
+  unexcusedAbsenceDays?: number,
+  autonomousActivityScores: AutonomousActivityScores = [3, 3, 3],
+  clubActivityScores: ClubActivityScores = [3, 3, 3],
+  volunteerActivityScores: VolunteerActivityScores = [undefined, undefined, undefined],
+  volunteerActivityBonuses: VolunteerActivityBonuses = [false, false, false]
+): string {
   return JSON.stringify({
     format: FILE_FORMAT,
     version: FILE_VERSION,
     savedAt: new Date().toISOString(),
+    unexcusedAbsenceDays,
+    autonomousActivityScores,
+    clubActivityScores,
+    volunteerActivityScores,
+    volunteerActivityBonuses,
     semesters
   }, null, 2);
 }
 
-export function parseScores(text: string): SemesterInput[] {
+export function parseScoreFile(text: string): ParsedScoreFile {
   const data: unknown = JSON.parse(text.replace(/^\uFEFF/, ''));
   if (!isRecord(data) || data.format !== FILE_FORMAT ||
-      (data.version !== 1 && data.version !== FILE_VERSION) || !Array.isArray(data.semesters) ||
-      (data.version === 1 ? data.semesters.length !== SEMESTERS.length - 1 : data.semesters.length !== SEMESTERS.length)) {
+      (data.version !== 1 && data.version !== 2 && data.version !== 3 && data.version !== 4 && data.version !== 5 && data.version !== 6 && data.version !== FILE_VERSION) || !Array.isArray(data.semesters) ||
+      (data.version === 1 ? data.semesters.length !== SEMESTERS.length - 1 : data.semesters.length !== SEMESTERS.length) ||
+      (data.unexcusedAbsenceDays !== undefined &&
+        (!Number.isInteger(data.unexcusedAbsenceDays) || Number(data.unexcusedAbsenceDays) < 0)) ||
+      (data.autonomousActivityScores !== undefined && !isGradeActivityScores(data.autonomousActivityScores)) ||
+      (data.clubActivityScores !== undefined && !isGradeActivityScores(data.clubActivityScores)) ||
+      (data.volunteerActivityScores !== undefined && !isVolunteerActivityScores(data.volunteerActivityScores)) ||
+      (data.volunteerActivityBonus !== undefined && typeof data.volunteerActivityBonus !== 'boolean') ||
+      (data.volunteerActivityBonuses !== undefined && !isVolunteerActivityBonuses(data.volunteerActivityBonuses))) {
     throw new Error('이 계산기에서 저장한 성적 파일을 선택해 주세요.');
   }
 
   const semesters = data.version === 1
     ? [{ key: '1-1', mode: 'free', subjects: [] }, ...data.semesters]
     : data.semesters;
-  return SEMESTERS.map((config) => {
+  const parsedSemesters = SEMESTERS.map((config) => {
     const matches = semesters.filter((item: unknown) => isRecord(item) && item.key === config.key);
     const semester: unknown = matches[0];
     if (matches.length !== 1 || !isRecord(semester) ||
@@ -56,8 +90,34 @@ export function parseScores(text: string): SemesterInput[] {
       };
     });
 
-    return { key: config.key, mode: semester.mode, averageScore: semester.averageScore, subjects };
+    return {
+      key: config.key,
+      mode: semester.mode as SemesterInput['mode'],
+      averageScore: semester.averageScore,
+      subjects
+    };
   });
+
+  return {
+    semesters: parsedSemesters,
+    unexcusedAbsenceDays: data.unexcusedAbsenceDays as number | undefined,
+    autonomousActivityScores: isGradeActivityScores(data.autonomousActivityScores)
+      ? data.autonomousActivityScores
+      : [3, 3, 3],
+    clubActivityScores: isGradeActivityScores(data.clubActivityScores)
+      ? data.clubActivityScores
+      : [3, 3, 3],
+    volunteerActivityScores: parseVolunteerActivityScores(data.volunteerActivityScores),
+    volunteerActivityBonuses: isVolunteerActivityBonuses(data.volunteerActivityBonuses)
+      ? data.volunteerActivityBonuses
+      : data.version === 6 && data.volunteerActivityBonus === true
+        ? [true, false, false]
+        : [false, false, false]
+  };
+}
+
+export function parseScores(text: string): SemesterInput[] {
+  return parseScoreFile(text).semesters;
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -66,4 +126,24 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 
 function isOptionalNumber(value: unknown): value is number | undefined {
   return value === undefined || (typeof value === 'number' && Number.isFinite(value));
+}
+
+function isGradeActivityScores(value: unknown): value is GradeActivityScores {
+  return Array.isArray(value) && value.length === 3 &&
+    value.every((score) => Number.isInteger(score) && score >= 2 && score <= 4);
+}
+
+function isVolunteerActivityScores(value: unknown): value is [number | null | undefined, number | null | undefined, number | null | undefined] {
+  return Array.isArray(value) && value.length === 3 &&
+    value.every((score) => score === null || score === undefined ||
+      (Number.isInteger(score) && score >= 2 && score <= 4));
+}
+
+function parseVolunteerActivityScores(value: unknown): VolunteerActivityScores {
+  if (!isVolunteerActivityScores(value)) return [undefined, undefined, undefined];
+  return [value[0] ?? undefined, value[1] ?? undefined, value[2] ?? undefined];
+}
+
+function isVolunteerActivityBonuses(value: unknown): value is VolunteerActivityBonuses {
+  return Array.isArray(value) && value.length === 3 && value.every((bonus) => typeof bonus === 'boolean');
 }

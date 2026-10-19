@@ -207,7 +207,7 @@ main {
 
 .summary-grid {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(6, minmax(0, 1fr));
   gap: 12px;
 }
 
@@ -222,6 +222,94 @@ main {
 
 .summary-grid strong {
   font-size: 1.55rem;
+}
+
+.attendance-entry {
+  display: grid;
+  grid-template-columns: minmax(200px, 280px) auto minmax(0, 1fr);
+  gap: 16px;
+  align-items: end;
+  padding: 16px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--paper);
+}
+
+.attendance-entry p {
+  margin: 0 0 8px;
+  color: var(--muted);
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.attendance-entry p strong {
+  margin-left: 6px;
+  color: var(--accent-dark);
+  font-size: 1.2rem;
+}
+
+.attendance-entry small {
+  padding-bottom: 10px;
+  color: var(--muted);
+  line-height: 1.5;
+}
+
+.autonomous-entry {
+  display: grid;
+  gap: 14px;
+  padding: 16px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--paper);
+}
+
+.autonomous-heading {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  align-items: baseline;
+  justify-content: space-between;
+}
+
+.autonomous-heading strong {
+  color: var(--accent-dark);
+}
+
+.autonomous-grades {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.autonomous-entry small {
+  color: var(--muted);
+  line-height: 1.5;
+}
+
+.volunteer-bonus {
+  display: flex;
+  grid-template-columns: none;
+  align-items: center;
+  gap: 10px;
+}
+
+.volunteer-grades {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.volunteer-grade {
+  display: grid;
+  gap: 10px;
+  min-width: 0;
+}
+
+.volunteer-bonus input {
+  width: 20px;
+  min-width: 20px;
+  min-height: 20px;
+  margin: 0;
 }
 
 .breakdown,
@@ -375,8 +463,16 @@ tbody tr:last-child td {
   }
 
   .hero,
-  .summary-grid {
+  .summary-grid,
+  .attendance-entry,
+  .volunteer-grades {
     grid-template-columns: 1fr;
+  }
+
+  .attendance-entry p,
+  .attendance-entry small {
+    margin: 0;
+    padding: 0;
   }
 
   .score-panel {
@@ -412,6 +508,10 @@ tbody tr:last-child td {
 @media (max-width: 520px) {
   .semester {
     padding: 14px;
+  }
+
+  .autonomous-grades {
+    grid-template-columns: 1fr;
   }
 
   .subject-row {
