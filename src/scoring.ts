@@ -1,7 +1,7 @@
 export type Achievement = 'A' | 'B' | 'C' | 'D' | 'E';
 export type ArtsAchievement = Extract<Achievement, 'A' | 'B' | 'C'>;
 export type SubjectCategory = 'general' | 'arts';
-export type InputMode = 'raw' | 'achievement';
+export type InputMode = 'raw' | 'achievement' | 'assessment';
 export type SemesterInputMode = 'subjects' | 'average' | 'forecast' | 'free';
 export type SemesterKey = '1-1' | '1-2' | '2-1' | '2-2' | '3-1' | '3-2';
 
@@ -12,6 +12,22 @@ export interface SubjectInput {
   inputMode: InputMode;
   rawScore?: number;
   achievement?: Achievement;
+  assessments?: AssessmentInput[];
+}
+
+export interface AssessmentInput {
+  id: string;
+  name: string;
+  weight?: number;
+  score?: number;
+  maxScore?: number;
+  excused?: boolean;
+}
+
+export interface AssessmentScoreResult {
+  rawScore?: number;
+  provisional: boolean;
+  errors: string[];
 }
 
 export interface SemesterInput {
@@ -28,6 +44,7 @@ export interface SemesterResult {
   weightedScore: number;
   subjectCount?: number;
   isForecast?: boolean;
+  isProvisional?: boolean;
 }
 
 export interface CalculationResult {
@@ -124,7 +141,66 @@ export function scoreArtsRaw(rawScore: number): number {
   return 3;
 }
 
+export function calculateAssessmentRawScore(assessments: AssessmentInput[] = []): AssessmentScoreResult {
+  if (assessments.length === 0) {
+    return { provisional: false, errors: ['평가 항목을 추가해 주세요.'] };
+  }
+
+  const errors: string[] = [];
+  let totalWeight = 0;
+  assessments.forEach((assessment, index) => {
+    if (!assessment.name.trim()) errors.push(`${index + 1}번째 평가 이름을 입력해 주세요.`);
+    if (typeof assessment.weight !== 'number' || !Number.isFinite(assessment.weight) || assessment.weight < 0 || assessment.weight > 100) {
+      errors.push(`${assessment.name || `${index + 1}번째 평가`} 반영비율은 0~100%여야 합니다.`);
+    } else {
+      totalWeight += assessment.weight;
+    }
+    if (assessment.excused) return;
+
+    const hasScore = typeof assessment.score === 'number';
+    const hasMaxScore = typeof assessment.maxScore === 'number';
+    if (hasScore && !hasMaxScore) {
+      errors.push(`${assessment.name || `${index + 1}번째 평가`}의 만점을 입력해 주세요.`);
+    } else if (hasMaxScore &&
+      (!Number.isFinite(assessment.maxScore) || assessment.maxScore! <= 0 ||
+        (hasScore && (!Number.isFinite(assessment.score) || assessment.score! < 0 || assessment.score! > assessment.maxScore!)))) {
+      errors.push(`${assessment.name || `${index + 1}번째 평가`} 점수는 0 이상, 만점 이하여야 합니다.`);
+    }
+  });
+
+  if (Math.abs(totalWeight - 100) > 0.01) {
+    errors.push('평가 반영비율 합계를 100%로 맞춰 주세요.');
+  }
+  if (errors.length > 0) return { provisional: false, errors };
+
+  const completed = assessments.filter((assessment) =>
+    !assessment.excused && typeof assessment.score === 'number' && typeof assessment.maxScore === 'number'
+  );
+  const activeWeight = completed.reduce((sum, assessment) => sum + (assessment.weight ?? 0), 0);
+  if (completed.length === 0 || activeWeight <= 0) {
+    return { provisional: false, errors: ['계산할 평가 점수를 입력해 주세요.'] };
+  }
+
+  const weightedPercent = completed.reduce((sum, assessment) =>
+    sum + ((assessment.score! / assessment.maxScore!) * 100 * (assessment.weight ?? 0)), 0) / activeWeight;
+  const rawScore = Math.floor(weightedPercent + 0.5 + Number.EPSILON);
+  const provisional = assessments.some((assessment) =>
+    !assessment.excused && (typeof assessment.score !== 'number' || typeof assessment.maxScore !== 'number')
+  );
+  return { rawScore, provisional, errors: [] };
+}
+
 export function scoreSubject(subject: SubjectInput): number {
+  if (subject.inputMode === 'assessment') {
+    const assessment = calculateAssessmentRawScore(subject.assessments);
+    if (assessment.errors.length > 0 || assessment.rawScore === undefined) {
+      throw new Error(assessment.errors[0] ?? '평가 점수를 확인해 주세요.');
+    }
+    return subject.category === 'arts'
+      ? scoreArtsRaw(assessment.rawScore)
+      : scoreGeneralRaw(assessment.rawScore);
+  }
+
   if (subject.category === 'arts') {
     if (subject.inputMode === 'raw') {
       if (typeof subject.rawScore !== 'number') {
@@ -158,6 +234,7 @@ export function scoreSubject(subject: SubjectInput): number {
 export function calculateSemesterAverage(semester: SemesterInput): {
   averageScore?: number;
   subjectCount?: number;
+  isProvisional?: boolean;
   errors: ScoringError[];
 } {
   const label = getSemesterLabel(semester.key);
@@ -179,7 +256,7 @@ export function calculateSemesterAverage(semester: SemesterInput): {
       return { errors: [{ field: `${semester.key}.average`, message: `${label} 평균 환산점수는 1~5 사이여야 합니다.` }] };
     }
 
-    return { averageScore: semester.averageScore, errors: [] };
+    return { averageScore: semester.averageScore, isProvisional: false, errors: [] };
   }
 
   if (semester.subjects.length === 0) {
@@ -188,11 +265,15 @@ export function calculateSemesterAverage(semester: SemesterInput): {
 
   const errors: ScoringError[] = [];
   let total = 0;
+  let isProvisional = false;
 
   semester.subjects.forEach((subject, index) => {
     const subjectLabel = subject.name.trim() || `${index + 1}번째 과목`;
     try {
       total += scoreSubject(subject);
+      if (subject.inputMode === 'assessment' && calculateAssessmentRawScore(subject.assessments).provisional) {
+        isProvisional = true;
+      }
     } catch (error) {
       errors.push({
         field: `${semester.key}.subjects.${subject.id}`,
@@ -208,6 +289,7 @@ export function calculateSemesterAverage(semester: SemesterInput): {
   return {
     averageScore: total / semester.subjects.length,
     subjectCount: semester.subjects.length,
+    isProvisional,
     errors: []
   };
 }
@@ -254,7 +336,8 @@ export function calculateFinalScore(semesters: SemesterInput[]): ScoringOutcome 
       averageScore: semesterAverage.averageScore,
       weightedScore: semesterAverage.averageScore * config.weight,
       subjectCount: semesterAverage.subjectCount,
-      isForecast: semester.mode === 'forecast'
+      isForecast: semester.mode === 'forecast',
+      isProvisional: semesterAverage.isProvisional
     });
   });
 
@@ -274,7 +357,8 @@ export function calculateFinalScore(semesters: SemesterInput[]): ScoringOutcome 
       semesters: semesterResults.map((semester) => ({
         ...semester,
         averageScore: roundToThree(semester.averageScore),
-        weightedScore: roundToThree(semester.weightedScore)
+        weightedScore: roundToThree(semester.weightedScore),
+        isProvisional: semester.isProvisional
       }))
     }
   };

@@ -1,7 +1,7 @@
-import { SEMESTERS, SemesterInput, SubjectInput } from './scoring';
+import { AssessmentInput, SEMESTERS, SemesterInput, SubjectInput } from './scoring';
 
 const FILE_FORMAT = 'middle-school-score';
-const FILE_VERSION = 7;
+const FILE_VERSION = 8;
 
 export type GradeActivityScores = [number, number, number];
 export type AutonomousActivityScores = GradeActivityScores;
@@ -42,7 +42,7 @@ export function serializeScores(
 export function parseScoreFile(text: string): ParsedScoreFile {
   const data: unknown = JSON.parse(text.replace(/^\uFEFF/, ''));
   if (!isRecord(data) || data.format !== FILE_FORMAT ||
-      (data.version !== 1 && data.version !== 2 && data.version !== 3 && data.version !== 4 && data.version !== 5 && data.version !== 6 && data.version !== FILE_VERSION) || !Array.isArray(data.semesters) ||
+      typeof data.version !== 'number' || ![1, 2, 3, 4, 5, 6, 7, FILE_VERSION].includes(data.version) || !Array.isArray(data.semesters) ||
       (data.version === 1 ? data.semesters.length !== SEMESTERS.length - 1 : data.semesters.length !== SEMESTERS.length) ||
       (data.unexcusedAbsenceDays !== undefined &&
         (!Number.isInteger(data.unexcusedAbsenceDays) || Number(data.unexcusedAbsenceDays) < 0)) ||
@@ -70,15 +70,25 @@ export function parseScoreFile(text: string): ParsedScoreFile {
     const subjects: SubjectInput[] = semester.subjects.map((subject: unknown, index: number) => {
       if (!isRecord(subject) || typeof subject.name !== 'string' ||
           (subject.category !== 'general' && subject.category !== 'arts') ||
-          (subject.inputMode !== 'raw' && subject.inputMode !== 'achievement') ||
+          (subject.inputMode !== 'raw' && subject.inputMode !== 'achievement' && subject.inputMode !== 'assessment') ||
           !isOptionalNumber(subject.rawScore) ||
           (subject.achievement !== undefined &&
             (typeof subject.achievement !== 'string' ||
               !['A', 'B', 'C', 'D', 'E'].includes(subject.achievement))) ||
           (subject.category === 'arts' &&
-            (subject.achievement !== undefined && !['A', 'B', 'C'].includes(String(subject.achievement))))) {
+            (subject.achievement !== undefined && !['A', 'B', 'C'].includes(String(subject.achievement)))) ||
+          (subject.assessments !== undefined && (!Array.isArray(subject.assessments) ||
+            !subject.assessments.every(isAssessmentInput))) ||
+          (subject.inputMode === 'assessment' && !Array.isArray(subject.assessments))) {
         throw new Error(`${config.label} ${index + 1}번째 과목의 저장 정보를 확인해 주세요.`);
       }
+
+      const assessments: AssessmentInput[] | undefined = Array.isArray(subject.assessments)
+        ? subject.assessments.map((assessment: AssessmentInput, assessmentIndex: number) => ({
+            ...assessment,
+            id: `loaded-${config.key}-${index}-assessment-${assessmentIndex}`
+          }))
+        : undefined;
 
       return {
         id: `loaded-${config.key}-${index}`,
@@ -86,7 +96,8 @@ export function parseScoreFile(text: string): ParsedScoreFile {
         category: subject.category,
         inputMode: subject.inputMode,
         rawScore: subject.rawScore,
-        achievement: subject.achievement as SubjectInput['achievement']
+        achievement: subject.achievement as SubjectInput['achievement'],
+        assessments
       };
     });
 
@@ -126,6 +137,13 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 
 function isOptionalNumber(value: unknown): value is number | undefined {
   return value === undefined || (typeof value === 'number' && Number.isFinite(value));
+}
+
+function isAssessmentInput(value: unknown): value is AssessmentInput {
+  return isRecord(value) && typeof value.name === 'string' &&
+    isOptionalNumber(value.weight) &&
+    isOptionalNumber(value.score) && isOptionalNumber(value.maxScore) &&
+    (value.excused === undefined || typeof value.excused === 'boolean');
 }
 
 function isGradeActivityScores(value: unknown): value is GradeActivityScores {
