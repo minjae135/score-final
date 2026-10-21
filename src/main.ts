@@ -3,7 +3,6 @@ import { parseScoreFile, serializeScores } from './storage';
 import {
   Achievement,
   ATTENDANCE_MAX_SCORE,
-  AssessmentInput,
   AUTONOMOUS_ACTIVITY_MAX_SCORE,
   CLUB_ACTIVITY_MAX_SCORE,
   InputMode,
@@ -14,11 +13,9 @@ import {
   SubjectInput,
   VOLUNTEER_ACTIVITY_MAX_SCORE,
   calculateAttendanceScore,
-  calculateAssessmentRawScore,
   calculateFinalScore,
   calculateForecast,
-  roundToThree,
-  scoreSubject
+  roundToThree
 } from './scoring';
 import type {
   AutonomousActivityScores,
@@ -43,11 +40,8 @@ const DEFAULT_SUBJECTS: Record<string, string[]> = {
   '3': ['국어', '사회', '역사', '수학', '과학', '기술·가정', '영어', '진로와 직업', '과제탐구', '체육', '음악', '미술']
 };
 const ARTS_SUBJECTS = new Set(['체육', '음악', '미술']);
-const PERFORMANCE_ONLY_SUBJECTS = new Set(['도덕', '기술·가정', '한문', '진로와 직업', '과제탐구']);
 
 let nextSubjectId = 1;
-let nextAssessmentId = 1;
-const expandedAssessmentSubjects = new Set<string>();
 let state: SemesterInput[] = createDefaultState();
 let unexcusedAbsenceDays: number | undefined = 0;
 let autonomousActivityScores: AutonomousActivityScores = [3, 3, 3];
@@ -79,43 +73,6 @@ function createSubject(overrides: Partial<SubjectInput> = {}): SubjectInput {
   };
 }
 
-function createAssessment(name: string, weight: number): AssessmentInput {
-  return {
-    id: `assessment-${nextAssessmentId++}`,
-    name,
-    weight,
-    maxScore: 100,
-    excused: false
-  };
-}
-
-function createDefaultAssessments(subject: SubjectInput): AssessmentInput[] {
-  if (subject.category === 'arts' || PERFORMANCE_ONLY_SUBJECTS.has(subject.name.trim())) {
-    return [createAssessment('수행평가 1', 50), createAssessment('수행평가 2', 50)];
-  }
-  if (subject.name.trim() === '정보') {
-    return [
-      createAssessment('2회고사 (기말고사)', 40),
-      createAssessment('수행평가 1', 30),
-      createAssessment('수행평가 2', 30)
-    ];
-  }
-  if (subject.name.trim() === '영어') {
-    return [
-      createAssessment('1회고사 (중간고사)', 30),
-      createAssessment('2회고사 (기말고사)', 30),
-      createAssessment('영어듣기평가', 10),
-      createAssessment('수행평가', 30)
-    ];
-  }
-  return [
-    createAssessment('1회고사 (중간고사)', 30),
-    createAssessment('2회고사 (기말고사)', 30),
-    createAssessment('수행평가 1', 20),
-    createAssessment('수행평가 2', 20)
-  ];
-}
-
 function render(): void {
   const outcome = calculateFinalScore(state);
   const result = outcome.result;
@@ -133,7 +90,7 @@ function render(): void {
         <h1>중학교 교과성적 환산 점수 계산기</h1>
       </div>
       <div class="score-panel ${totalScore !== undefined ? 'is-ready' : ''}">
-        <span>${result?.semesters.some((semester) => semester.isForecast || semester.isProvisional) ? '예상 총점' : '총점'}</span>
+        <span>${state.some((semester) => semester.key !== '1-1' && semester.mode === 'forecast') ? '예상 총점' : '총점'}</span>
         <strong>${totalScore !== undefined ? totalScore.toFixed(3) : '--.---'}</strong>
       </div>
     </header>
@@ -187,7 +144,7 @@ function renderSummary(): string {
       <div><span>자율활동 · ${AUTONOMOUS_ACTIVITY_MAX_SCORE}점</span><strong>${getAutonomousActivityScore().toFixed(3)}</strong></div>
       <div><span>동아리 활동 · ${CLUB_ACTIVITY_MAX_SCORE}점</span><strong>${getClubActivityScore().toFixed(3)}</strong></div>
       <div><span>봉사활동 · ${VOLUNTEER_ACTIVITY_MAX_SCORE}점</span><strong>${volunteerScore === undefined ? '--.---' : volunteerScore.toFixed(3)}</strong></div>
-      <div><span>${result?.semesters.some((semester) => semester.isForecast || semester.isProvisional) ? '예상 총점' : '총점'} · ${240 + ATTENDANCE_MAX_SCORE + AUTONOMOUS_ACTIVITY_MAX_SCORE + CLUB_ACTIVITY_MAX_SCORE + VOLUNTEER_ACTIVITY_MAX_SCORE}점</span><strong>${totalScore !== undefined ? totalScore.toFixed(3) : '--.---'}</strong></div>
+      <div><span>${result?.semesters.some((semester) => semester.isForecast) ? '예상 총점' : '총점'} · ${240 + ATTENDANCE_MAX_SCORE + AUTONOMOUS_ACTIVITY_MAX_SCORE + CLUB_ACTIVITY_MAX_SCORE + VOLUNTEER_ACTIVITY_MAX_SCORE}점</span><strong>${totalScore !== undefined ? totalScore.toFixed(3) : '--.---'}</strong></div>
     </section>
 
     ${result ? `<section class="breakdown" aria-label="학기별 반영 점수">
@@ -204,7 +161,7 @@ function renderSummary(): string {
             .map(
               (semester) => `
                 <tr>
-                  <td>${semester.label}${semester.isForecast ? ' (예상)' : semester.isProvisional ? ' (임시)' : ''}</td>
+                  <td>${semester.label}${semester.isForecast ? ' (예상)' : ''}</td>
                   <td>${semester.averageScore.toFixed(3)}</td>
                   <td>${semester.weightedScore.toFixed(3)}</td>
                 </tr>
@@ -336,23 +293,12 @@ function renderErrors(errors: string[]): string {
   }
 
   if (errors.every((error) =>
-    error.includes('입력해 주세요.') || error.includes('추가해 주세요.') || error.includes('성취도만 입력할 수 있습니다.')
+    error.includes('입력해 주세요.') || error.includes('성취도만 입력할 수 있습니다.')
   )) {
     return `
       <section class="errors" aria-label="입력 안내">
         <p>미입력 항목 ${errors.length}개 · 성적을 입력하면 점수가 계산됩니다.</p>
       </section>
-    `;
-  }
-
-  if (errors.length >= 5) {
-    return `
-      <details class="errors errors-collapsible" aria-label="입력 오류">
-        <summary>오류 메시지 ${errors.length}개 · 눌러서 펼치기</summary>
-        <div class="error-list">
-          ${errors.map((error) => `<p>${escapeHtml(error)}</p>`).join('')}
-        </div>
-      </details>
     `;
   }
 
@@ -471,150 +417,68 @@ function renderAverageMode(semester: SemesterInput): string {
 function renderSubjectRow(semester: SemesterInput, subject: SubjectInput): string {
   const isArts = subject.category === 'arts';
   const achievements = isArts ? ARTS_ACHIEVEMENTS : GENERAL_ACHIEVEMENTS;
-  const isExpanded = expandedAssessmentSubjects.has(subject.id);
 
   return `
-    <div class="subject-entry" data-subject-entry="${subject.id}">
-      <div class="subject-row">
-        <label>
-          <span>과목명</span>
-          <input
-            type="text"
-            value="${escapeAttribute(subject.name)}"
-            placeholder="${isArts ? '체육, 음악, 미술' : '국어, 수학, 영어'}"
-            data-field="name"
-            data-semester="${semester.key}"
-            data-subject="${subject.id}"
-          />
-        </label>
-
-        <label>
-          <span>구분</span>
-          <select data-field="category" data-semester="${semester.key}" data-subject="${subject.id}">
-            <option value="general" ${subject.category === 'general' ? 'selected' : ''}>일반교과</option>
-            <option value="arts" ${subject.category === 'arts' ? 'selected' : ''}>체육·예술</option>
-          </select>
-        </label>
-
-        <div class="general-input">
-          <label>
-            <span>방식</span>
-            <select data-field="inputMode" data-semester="${semester.key}" data-subject="${subject.id}">
-              <option value="raw" ${subject.inputMode === 'raw' ? 'selected' : ''}>원점수</option>
-              <option value="achievement" ${subject.inputMode === 'achievement' ? 'selected' : ''}>성취도</option>
-              <option value="assessment" ${subject.inputMode === 'assessment' ? 'selected' : ''}>평가별</option>
-            </select>
-          </label>
-          ${
-            subject.inputMode === 'raw'
-              ? `
-                <label>
-                  <span>원점수</span>
-                  <input
-                    type="number"
-                    inputmode="decimal"
-                    min="0"
-                    max="100"
-                    step="0.01"
-                    value="${subject.rawScore ?? ''}"
-                    data-field="rawScore"
-                    data-semester="${semester.key}"
-                    data-subject="${subject.id}"
-                  />
-                </label>
-              `
-              : subject.inputMode === 'achievement'
-              ? renderAchievementSelect(semester, subject, achievements, '성취도')
-              : `
-                <div class="assessment-control">
-                  <button
-                    type="button"
-                    class="assessment-toggle"
-                    data-action="toggle-assessments"
-                    data-semester="${semester.key}"
-                    data-subject="${subject.id}"
-                    aria-expanded="${isExpanded}"
-                    aria-controls="assessment-details-${subject.id}"
-                  >${isExpanded ? '세부 평가 접기' : '세부 평가 펼치기'}</button>
-                  <span class="assessment-summary" data-assessment-summary="${subject.id}">${escapeHtml(renderAssessmentSummary(subject))}</span>
-                </div>
-              `
-          }
-        </div>
-
-        <button
-          type="button"
-          class="icon-button"
-          title="과목 삭제"
-          aria-label="과목 삭제"
-          data-action="remove-subject"
+    <div class="subject-row" data-subject="${subject.id}">
+      <label>
+        <span>과목명</span>
+        <input
+          type="text"
+          value="${escapeAttribute(subject.name)}"
+          placeholder="${isArts ? '체육, 음악, 미술' : '국어, 수학, 영어'}"
+          data-field="name"
           data-semester="${semester.key}"
           data-subject="${subject.id}"
-        >×</button>
-      </div>
-      ${subject.inputMode === 'assessment' ? renderAssessmentDetails(semester, subject, isExpanded) : ''}
-    </div>
-  `;
-}
+        />
+      </label>
 
-function renderAssessmentSummary(subject: SubjectInput): string {
-  const result = calculateAssessmentRawScore(subject.assessments);
-  if (result.rawScore === undefined) return result.errors[0] ?? '평가 점수를 입력하면 계산됩니다.';
-  const score = scoreSubject(subject);
-  const achievement = (subject.category === 'arts' ? ['', '', '', 'C', 'B', 'A'] : ['', 'E', 'D', 'C', 'B', 'A'])[score];
-  return `원점수 ${result.rawScore}점 · 성취도 ${achievement}${result.provisional ? ' · 임시' : ''}`;
-}
+      <label>
+        <span>구분</span>
+        <select data-field="category" data-semester="${semester.key}" data-subject="${subject.id}">
+          <option value="general" ${subject.category === 'general' ? 'selected' : ''}>일반교과</option>
+          <option value="arts" ${subject.category === 'arts' ? 'selected' : ''}>체육·예술</option>
+        </select>
+      </label>
 
-function renderAssessmentDetails(semester: SemesterInput, subject: SubjectInput, isExpanded: boolean): string {
-  const assessments = subject.assessments ?? [];
-  return `
-    <section class="assessment-details" id="assessment-details-${subject.id}" aria-label="${escapeAttribute(subject.name || '과목')} 세부 평가" ${isExpanded ? '' : 'hidden'}>
-      <p class="assessment-note">반영비율 합계 100% · 획득점수와 만점을 입력하세요. 인정 미응시는 남은 비율로 자동 환산하고, 미인정 미응시는 획득점수 0점으로 입력하세요.</p>
-      <div class="assessment-list">
-        ${assessments.map((assessment, index) => renderAssessmentItem(semester, subject, assessment, index, assessments.length)).join('')}
+      <div class="general-input">
+        <label>
+          <span>방식</span>
+          <select data-field="inputMode" data-semester="${semester.key}" data-subject="${subject.id}">
+            <option value="raw" ${subject.inputMode === 'raw' ? 'selected' : ''}>원점수</option>
+            <option value="achievement" ${subject.inputMode === 'achievement' ? 'selected' : ''}>성취도</option>
+          </select>
+        </label>
+        ${
+          subject.inputMode === 'raw'
+            ? `
+              <label>
+                <span>원점수</span>
+                <input
+                  type="number"
+                  inputmode="decimal"
+                  min="0"
+                  max="100"
+                  step="0.01"
+                  value="${subject.rawScore ?? ''}"
+                  data-field="rawScore"
+                  data-semester="${semester.key}"
+                  data-subject="${subject.id}"
+                />
+              </label>
+            `
+            : renderAchievementSelect(semester, subject, achievements, '성취도')
+        }
       </div>
-      <button type="button" class="assessment-add" data-action="add-assessment" data-semester="${semester.key}" data-subject="${subject.id}">평가 추가</button>
-    </section>
-  `;
-}
 
-function renderAssessmentItem(
-  semester: SemesterInput,
-  subject: SubjectInput,
-  assessment: AssessmentInput,
-  index: number,
-  count: number
-): string {
-  return `
-    <div class="assessment-item" data-assessment-row="${assessment.id}">
-      <div class="assessment-item-title">
-        <strong>평가 ${index + 1}</strong>
-        <div class="assessment-order-controls">
-          <button type="button" class="icon-button" title="위로 이동" aria-label="${escapeAttribute(assessment.name || `평가 ${index + 1}`)} 위로 이동" data-action="move-assessment" data-direction="-1" data-semester="${semester.key}" data-subject="${subject.id}" data-assessment="${assessment.id}" ${index === 0 ? 'disabled' : ''}>↑</button>
-          <button type="button" class="icon-button" title="아래로 이동" aria-label="${escapeAttribute(assessment.name || `평가 ${index + 1}`)} 아래로 이동" data-action="move-assessment" data-direction="1" data-semester="${semester.key}" data-subject="${subject.id}" data-assessment="${assessment.id}" ${index === count - 1 ? 'disabled' : ''}>↓</button>
-          <button type="button" class="icon-button" title="평가 삭제" aria-label="${escapeAttribute(assessment.name || `평가 ${index + 1}`)} 평가 삭제" data-action="remove-assessment" data-semester="${semester.key}" data-subject="${subject.id}" data-assessment="${assessment.id}">×</button>
-        </div>
-      </div>
-      <label>
-        <span>평가 이름</span>
-        <input type="text" value="${escapeAttribute(assessment.name)}" data-field="assessmentName" data-semester="${semester.key}" data-subject="${subject.id}" data-assessment="${assessment.id}" />
-      </label>
-      <label>
-        <span>반영비율 (%)</span>
-        <input type="number" inputmode="decimal" min="0" max="100" step="0.01" value="${assessment.weight ?? ''}" data-field="assessmentWeight" data-semester="${semester.key}" data-subject="${subject.id}" data-assessment="${assessment.id}" />
-      </label>
-      <label>
-        <span>획득점수</span>
-        <input type="number" inputmode="decimal" min="0" step="0.01" value="${assessment.score ?? ''}" data-assessment-input data-field="assessmentScore" data-semester="${semester.key}" data-subject="${subject.id}" data-assessment="${assessment.id}" ${assessment.excused ? 'disabled' : ''} />
-      </label>
-      <label>
-        <span>만점</span>
-        <input type="number" inputmode="decimal" min="0.01" step="0.01" value="${assessment.maxScore ?? ''}" data-assessment-input data-field="assessmentMaxScore" data-semester="${semester.key}" data-subject="${subject.id}" data-assessment="${assessment.id}" ${assessment.excused ? 'disabled' : ''} />
-      </label>
-      <label class="assessment-excused">
-        <input type="checkbox" data-field="assessmentExcused" data-semester="${semester.key}" data-subject="${subject.id}" data-assessment="${assessment.id}" ${assessment.excused ? 'checked' : ''} />
-        <span>인정 미응시</span>
-      </label>
+      <button
+        type="button"
+        class="icon-button"
+        title="삭제"
+        aria-label="삭제"
+        data-action="remove-subject"
+        data-semester="${semester.key}"
+        data-subject="${subject.id}"
+      >×</button>
     </div>
   `;
 }
@@ -688,7 +552,7 @@ function updateResults(): void {
   }
   const scoreLabel = scorePanel?.querySelector('span');
   if (scoreLabel) {
-    scoreLabel.textContent = outcome.result?.semesters.some((semester) => semester.isForecast || semester.isProvisional) ? '예상 총점' : '총점';
+    scoreLabel.textContent = state.some((semester) => semester.key !== '1-1' && semester.mode === 'forecast') ? '예상 총점' : '총점';
   }
   const attendanceScoreElement = appRoot.querySelector<HTMLElement>('[data-attendance-score]');
   if (attendanceScoreElement) {
@@ -701,11 +565,6 @@ function updateResults(): void {
   appRoot.querySelectorAll<HTMLElement>('[data-forecast]').forEach((element) => {
     const semester = state.find((item) => item.key === element.dataset.forecast);
     if (semester) element.textContent = renderForecastValue(semester);
-  });
-  appRoot.querySelectorAll<HTMLElement>('[data-assessment-summary]').forEach((element) => {
-    const subjectId = element.dataset.assessmentSummary;
-    const subject = subjectId ? state.flatMap((semester) => semester.subjects).find((item) => item.id === subjectId) : undefined;
-    if (subject) element.textContent = renderAssessmentSummary(subject);
   });
 
   // Keep the active field in place when the result or error sections change height.
@@ -773,7 +632,6 @@ function handleFieldChange(event: Event): void {
   const field = target.dataset.field;
   const semesterKey = target.dataset.semester;
   const subjectId = target.dataset.subject;
-  const assessmentId = target.dataset.assessment;
 
   if (!field || !semesterKey) {
     return;
@@ -799,24 +657,6 @@ function handleFieldChange(event: Event): void {
     return;
   }
 
-  if (field?.startsWith('assessment')) {
-    const assessment = subject.assessments?.find((item) => item.id === assessmentId);
-    if (!assessment) return;
-    if (field === 'assessmentName') assessment.name = target.value;
-    if (field === 'assessmentWeight') assessment.weight = parseOptionalNumber(target.value);
-    if (field === 'assessmentScore') assessment.score = parseOptionalNumber(target.value);
-    if (field === 'assessmentMaxScore') assessment.maxScore = parseOptionalNumber(target.value);
-    if (field === 'assessmentExcused' && target instanceof HTMLInputElement) {
-      assessment.excused = target.checked;
-      const row = target.closest<HTMLElement>('.assessment-item');
-      row?.querySelectorAll<HTMLInputElement>('[data-assessment-input]').forEach((input) => {
-        input.disabled = target.checked;
-      });
-    }
-    updateResults();
-    return;
-  }
-
   if (field === 'name') {
     subject.name = target.value;
   }
@@ -834,9 +674,6 @@ function handleFieldChange(event: Event): void {
 
   if (field === 'inputMode') {
     subject.inputMode = target.value as InputMode;
-    if (subject.inputMode === 'assessment' && subject.assessments === undefined) {
-      subject.assessments = createDefaultAssessments(subject);
-    }
   }
 
   if (field === 'rawScore') {
@@ -848,7 +685,7 @@ function handleFieldChange(event: Event): void {
   }
 
   if (field === 'category' || field === 'inputMode') {
-    const row = target.closest<HTMLElement>('.subject-entry');
+    const row = target.closest<HTMLElement>('.subject-row');
     if (row) {
       const previousTop = row.getBoundingClientRect().top;
       const template = document.createElement('template');
@@ -869,7 +706,6 @@ function handleAction(event: Event): void {
   const action = button.dataset.action;
   const semesterKey = button.dataset.semester;
   const subjectId = button.dataset.subject;
-  const assessmentId = button.dataset.assessment;
 
   if (action === 'forecast-empty') {
     let count = 0;
@@ -877,7 +713,9 @@ function handleAction(event: Event): void {
       const isEmpty = semester.mode === 'average'
         ? semester.averageScore === undefined
         : semester.mode === 'subjects' && semester.subjects.every((subject) =>
-          !subjectHasInput(subject));
+          subject.category === 'general' && subject.inputMode === 'raw'
+            ? subject.rawScore === undefined
+            : subject.achievement === undefined);
       if (isEmpty && calculateForecast(state, semester.key).averageScore !== undefined) {
         semester.mode = 'forecast';
         count++;
@@ -933,58 +771,9 @@ function handleAction(event: Event): void {
 
   if (action === 'remove-subject' && subjectId) {
     semester.subjects = semester.subjects.filter((subject) => subject.id !== subjectId);
-    expandedAssessmentSubjects.delete(subjectId);
   }
 
-  if (subjectId && action === 'toggle-assessments') {
-    if (expandedAssessmentSubjects.has(subjectId)) expandedAssessmentSubjects.delete(subjectId);
-    else expandedAssessmentSubjects.add(subjectId);
-    renderAtScrollPosition();
-    return;
-  }
-
-  if (subjectId && action === 'add-assessment') {
-    const subject = semester.subjects.find((item) => item.id === subjectId);
-    if (subject) {
-      subject.assessments ??= [];
-      subject.assessments.push(createAssessment('새 평가', 0));
-      expandedAssessmentSubjects.add(subjectId);
-    }
-  }
-
-  if (subjectId && assessmentId && action === 'remove-assessment') {
-    const subject = semester.subjects.find((item) => item.id === subjectId);
-    if (subject) subject.assessments = (subject.assessments ?? []).filter((item) => item.id !== assessmentId);
-  }
-
-  if (subjectId && assessmentId && action === 'move-assessment') {
-    const subject = semester.subjects.find((item) => item.id === subjectId);
-    const assessments = subject?.assessments;
-    const index = assessments?.findIndex((item) => item.id === assessmentId) ?? -1;
-    const targetIndex = index + Number(button.dataset.direction ?? 0);
-    if (assessments && index >= 0 && targetIndex >= 0 && targetIndex < assessments.length) {
-      [assessments[index], assessments[targetIndex]] = [assessments[targetIndex], assessments[index]];
-    }
-  }
-
-  renderAtScrollPosition();
-}
-
-function renderAtScrollPosition(): void {
-  const scrollY = window.scrollY;
   render();
-  window.scrollTo(0, scrollY);
-}
-
-function subjectHasInput(subject: SubjectInput): boolean {
-  if (subject.inputMode === 'assessment') {
-    return (subject.assessments ?? []).some((item) =>
-      item.excused || item.score !== undefined
-    );
-  }
-  return subject.inputMode === 'raw'
-    ? subject.rawScore !== undefined
-    : subject.achievement !== undefined;
 }
 
 function saveFile(): void {
@@ -1033,7 +822,6 @@ async function handleFileLoad(event: Event): Promise<void> {
   try {
     const parsed = parseScoreFile(await file.text());
     state = parsed.semesters;
-    expandedAssessmentSubjects.clear();
     unexcusedAbsenceDays = parsed.unexcusedAbsenceDays;
     autonomousActivityScores = parsed.autonomousActivityScores;
     clubActivityScores = parsed.clubActivityScores;
@@ -1059,7 +847,6 @@ function setFileStatus(message: string, isError = false): void {
 
 function fillExample(): void {
   state = createDefaultState();
-  expandedAssessmentSubjects.clear();
   unexcusedAbsenceDays = 0;
   autonomousActivityScores = [3, 3, 3];
   clubActivityScores = [3, 3, 3];
@@ -1068,11 +855,7 @@ function fillExample(): void {
   state.forEach((semester) => {
     if (semester.mode === 'free') return;
     semester.subjects.forEach((subject, index) => {
-      if (subject.inputMode === 'assessment') {
-        (subject.assessments ?? []).forEach((assessment) => {
-          if (!assessment.excused) assessment.score = (assessment.maxScore ?? 100) * (0.85 + (index % 3) * 0.05);
-        });
-      } else if (subject.category === 'arts') {
+      if (subject.category === 'arts') {
         subject.achievement = index % 2 === 0 ? 'A' : 'B';
       } else {
         subject.rawScore = 85 + (index % 3) * 5;
@@ -1083,7 +866,6 @@ function fillExample(): void {
 
 function resetState(): void {
   state = createDefaultState();
-  expandedAssessmentSubjects.clear();
   unexcusedAbsenceDays = 0;
   autonomousActivityScores = [3, 3, 3];
   clubActivityScores = [3, 3, 3];

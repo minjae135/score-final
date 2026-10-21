@@ -158,6 +158,74 @@ main {
   font-weight: 800;
 }
 
+.feedback-dialog {
+  width: min(520px, calc(100% - 32px));
+  padding: 22px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--paper);
+  color: var(--ink);
+  box-shadow: 0 18px 60px rgba(20, 24, 24, 0.22);
+}
+
+.feedback-dialog::backdrop {
+  background: rgba(20, 24, 24, 0.48);
+}
+
+.feedback-dialog-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.feedback-dialog-header .icon-button {
+  flex: 0 0 40px;
+}
+
+.feedback-dialog > p {
+  margin: 14px 0;
+  color: var(--muted);
+  line-height: 1.55;
+}
+
+.feedback-links {
+  display: grid;
+  gap: 10px;
+}
+
+.feedback-links a {
+  display: grid;
+  gap: 4px;
+  padding: 13px 14px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #ffffff;
+  color: var(--ink);
+  text-decoration: none;
+}
+
+.feedback-links a:hover,
+.feedback-links a:focus-visible {
+  border-color: var(--accent);
+  outline: none;
+}
+
+.feedback-links strong {
+  color: var(--accent-dark);
+}
+
+.feedback-links span,
+.feedback-dialog .feedback-login-note {
+  color: var(--muted);
+  font-size: 0.9rem;
+}
+
+.feedback-dialog .feedback-login-note {
+  margin-bottom: 0;
+  font-size: 0.82rem;
+}
+
 .file-status {
   margin: 0;
   color: var(--accent-dark);
