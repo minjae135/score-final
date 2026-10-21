@@ -43,10 +43,10 @@ const ARTS_SUBJECTS = new Set(['체육', '음악', '미술']);
 
 let nextSubjectId = 1;
 let state: SemesterInput[] = createDefaultState();
-let unexcusedAbsenceDays: number | undefined;
+let unexcusedAbsenceDays: number | undefined = 0;
 let autonomousActivityScores: AutonomousActivityScores = [3, 3, 3];
 let clubActivityScores: ClubActivityScores = [3, 3, 3];
-let volunteerActivityScores: VolunteerActivityScores = [undefined, undefined, undefined];
+let volunteerActivityScores: VolunteerActivityScores = [4, 4, 4];
 let volunteerActivityBonuses: VolunteerActivityBonuses = [false, false, false];
 
 function createDefaultState(): SemesterInput[] {
@@ -440,41 +440,35 @@ function renderSubjectRow(semester: SemesterInput, subject: SubjectInput): strin
         </select>
       </label>
 
-      ${
-        isArts
-          ? renderAchievementSelect(semester, subject, achievements, '성취도')
-          : `
-            <div class="general-input">
+      <div class="general-input">
+        <label>
+          <span>방식</span>
+          <select data-field="inputMode" data-semester="${semester.key}" data-subject="${subject.id}">
+            <option value="raw" ${subject.inputMode === 'raw' ? 'selected' : ''}>원점수</option>
+            <option value="achievement" ${subject.inputMode === 'achievement' ? 'selected' : ''}>성취도</option>
+          </select>
+        </label>
+        ${
+          subject.inputMode === 'raw'
+            ? `
               <label>
-                <span>방식</span>
-                <select data-field="inputMode" data-semester="${semester.key}" data-subject="${subject.id}">
-                  <option value="raw" ${subject.inputMode === 'raw' ? 'selected' : ''}>원점수</option>
-                  <option value="achievement" ${subject.inputMode === 'achievement' ? 'selected' : ''}>성취도</option>
-                </select>
+                <span>원점수</span>
+                <input
+                  type="number"
+                  inputmode="decimal"
+                  min="0"
+                  max="100"
+                  step="0.01"
+                  value="${subject.rawScore ?? ''}"
+                  data-field="rawScore"
+                  data-semester="${semester.key}"
+                  data-subject="${subject.id}"
+                />
               </label>
-              ${
-                subject.inputMode === 'raw'
-                  ? `
-                    <label>
-                      <span>원점수</span>
-                      <input
-                        type="number"
-                        inputmode="decimal"
-                        min="0"
-                        max="100"
-                        step="0.01"
-                        value="${subject.rawScore ?? ''}"
-                        data-field="rawScore"
-                        data-semester="${semester.key}"
-                        data-subject="${subject.id}"
-                      />
-                    </label>
-                  `
-                  : renderAchievementSelect(semester, subject, achievements, '성취도')
-              }
-            </div>
-          `
-      }
+            `
+            : renderAchievementSelect(semester, subject, achievements, '성취도')
+        }
+      </div>
 
       <button
         type="button"
@@ -872,10 +866,10 @@ function fillExample(): void {
 
 function resetState(): void {
   state = createDefaultState();
-  unexcusedAbsenceDays = undefined;
+  unexcusedAbsenceDays = 0;
   autonomousActivityScores = [3, 3, 3];
   clubActivityScores = [3, 3, 3];
-  volunteerActivityScores = [undefined, undefined, undefined];
+  volunteerActivityScores = [4, 4, 4];
   volunteerActivityBonuses = [false, false, false];
 }
 

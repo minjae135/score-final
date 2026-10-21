@@ -75,8 +75,8 @@ export function parseScoreFile(text: string): ParsedScoreFile {
           (subject.achievement !== undefined &&
             (typeof subject.achievement !== 'string' ||
               !['A', 'B', 'C', 'D', 'E'].includes(subject.achievement))) ||
-          (subject.category === 'arts' && (subject.inputMode !== 'achievement' ||
-            (subject.achievement !== undefined && !['A', 'B', 'C'].includes(String(subject.achievement)))))) {
+          (subject.category === 'arts' &&
+            (subject.achievement !== undefined && !['A', 'B', 'C'].includes(String(subject.achievement))))) {
         throw new Error(`${config.label} ${index + 1}번째 과목의 저장 정보를 확인해 주세요.`);
       }
 
@@ -100,7 +100,7 @@ export function parseScoreFile(text: string): ParsedScoreFile {
 
   return {
     semesters: parsedSemesters,
-    unexcusedAbsenceDays: data.unexcusedAbsenceDays as number | undefined,
+    unexcusedAbsenceDays: (data.unexcusedAbsenceDays as number | undefined) ?? 0,
     autonomousActivityScores: isGradeActivityScores(data.autonomousActivityScores)
       ? data.autonomousActivityScores
       : [3, 3, 3],
@@ -140,7 +140,7 @@ function isVolunteerActivityScores(value: unknown): value is [number | null | un
 }
 
 function parseVolunteerActivityScores(value: unknown): VolunteerActivityScores {
-  if (!isVolunteerActivityScores(value)) return [undefined, undefined, undefined];
+  if (value === undefined || !isVolunteerActivityScores(value)) return [4, 4, 4];
   return [value[0] ?? undefined, value[1] ?? undefined, value[2] ?? undefined];
 }
 

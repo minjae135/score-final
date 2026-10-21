@@ -114,8 +114,25 @@ export function scoreArtsAchievement(achievement: ArtsAchievement): number {
   }[achievement];
 }
 
+export function scoreArtsRaw(rawScore: number): number {
+  if (!Number.isFinite(rawScore) || rawScore < 0 || rawScore > 100) {
+    throw new Error('체육·예술 원점수는 0~100 사이여야 합니다.');
+  }
+
+  if (rawScore >= 80) return 5;
+  if (rawScore >= 60) return 4;
+  return 3;
+}
+
 export function scoreSubject(subject: SubjectInput): number {
   if (subject.category === 'arts') {
+    if (subject.inputMode === 'raw') {
+      if (typeof subject.rawScore !== 'number') {
+        throw new Error('체육·예술 원점수를 입력해 주세요.');
+      }
+      return scoreArtsRaw(subject.rawScore);
+    }
+
     if (!subject.achievement) {
       throw new Error('체육·예술 성취도를 입력해 주세요.');
     }
