@@ -164,20 +164,25 @@ function render(): void {
       </dialog>
       <p class="file-status" data-file-status role="status" aria-live="polite"></p>
 
-      ${renderAttendanceInput(attendanceScore)}
-      ${renderAutonomousActivityInput()}
-      ${renderClubActivityInput()}
-      ${renderVolunteerActivityInput()}
-
-      ${renderForecastRules()}
+      <section class="input-section" aria-labelledby="academic-heading">
+        <h2 id="academic-heading">교과 성적</h2>
+        ${renderForecastRules()}
+        <section class="semester-list" aria-label="학기별 입력">
+          ${state.map(renderSemester).join('')}
+        </section>
+      </section>
 
       <div data-results>
         ${renderSummary()}
         ${renderErrors(outcome.errors.map((error) => error.message))}
       </div>
 
-      <section class="semester-list" aria-label="학기별 입력">
-        ${state.map(renderSemester).join('')}
+      <section class="input-section" aria-labelledby="nonacademic-heading">
+        <h2 id="nonacademic-heading">비교과 성적</h2>
+        ${renderAttendanceInput(attendanceScore)}
+        ${renderAutonomousActivityInput()}
+        ${renderClubActivityInput()}
+        ${renderVolunteerActivityInput()}
       </section>
     </main>
   `;

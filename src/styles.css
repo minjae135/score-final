@@ -146,6 +146,11 @@ main {
   margin-top: 20px;
 }
 
+.input-section {
+  display: grid;
+  gap: 14px;
+}
+
 .toolbar {
   display: flex;
   flex-wrap: wrap;
