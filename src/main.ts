@@ -48,6 +48,7 @@ const PERFORMANCE_ONLY_SUBJECTS = new Set(['도덕', '기술·가정', '한문',
 let nextSubjectId = 1;
 let nextAssessmentId = 1;
 const expandedAssessmentSubjects = new Set<string>();
+const expandedSemesters = new Set<string>();
 let state: SemesterInput[] = createDefaultState();
 let unexcusedAbsenceDays: number | undefined = 0;
 let autonomousActivityScores: AutonomousActivityScores = [3, 3, 3];
@@ -406,9 +407,12 @@ function renderSemester(semester: SemesterInput): string {
   const label = config?.label ?? semester.key;
 
   return `
-    <section class="semester" data-semester="${semester.key}">
-      <div class="semester-header">
-        <h2>${label}</h2>
+    <details class="semester" data-semester="${semester.key}" ${expandedSemesters.has(semester.key) ? 'open' : ''}>
+      <summary class="semester-header">
+        <span class="semester-title" role="heading" aria-level="2">${label}</span>
+        <span class="semester-status" data-semester-summary="${semester.key}">${renderSemesterStatus(semester)}</span>
+      </summary>
+      <div class="semester-content">
         <div class="mode-toggle" role="group" aria-label="${label} 입력 방식">
           ${renderModeButton(semester, 'subjects', '과목별')}
           ${renderModeButton(semester, 'average', '평균')}
@@ -437,8 +441,21 @@ function renderSemester(semester: SemesterInput): string {
             <button type="button" class="add-subject" data-action="add-subject" data-semester="${semester.key}">과목 추가</button>
           `
       }
-    </section>
+      </div>
+    </details>
   `;
+}
+
+function renderSemesterStatus(semester: SemesterInput): string {
+  if (semester.mode === 'free') return '자유학기 · 산출 제외';
+  if (semester.mode === 'forecast') return '예상 성적';
+  if (semester.mode === 'average') {
+    return semester.averageScore === undefined
+      ? '평균 입력 · 미입력'
+      : `평균 입력 · ${semester.averageScore.toFixed(3)}`;
+  }
+  const completed = semester.subjects.filter(subjectHasInput).length;
+  return `과목별 · ${completed}/${semester.subjects.length}과목 입력`;
 }
 
 function renderForecastValue(semester: SemesterInput): string {
@@ -670,6 +687,14 @@ function bindEvents(root: HTMLElement = appRoot): void {
   root.querySelectorAll<HTMLInputElement | HTMLSelectElement>('input[data-field], select[data-field]').forEach((input) => {
     input.addEventListener(input instanceof HTMLSelectElement ? 'change' : 'input', handleFieldChange);
   });
+  root.querySelectorAll<HTMLDetailsElement>('details.semester').forEach((details) => {
+    details.addEventListener('toggle', () => {
+      const key = details.dataset.semester;
+      if (!key) return;
+      if (details.open) expandedSemesters.add(key);
+      else expandedSemesters.delete(key);
+    });
+  });
 
   root.querySelectorAll<HTMLButtonElement>('button[data-action]').forEach((button) => {
     button.addEventListener('click', handleAction);
@@ -715,6 +740,10 @@ function updateResults(): void {
   appRoot.querySelectorAll<HTMLElement>('[data-forecast]').forEach((element) => {
     const semester = state.find((item) => item.key === element.dataset.forecast);
     if (semester) element.textContent = renderForecastValue(semester);
+  });
+  appRoot.querySelectorAll<HTMLElement>('[data-semester-summary]').forEach((element) => {
+    const semester = state.find((item) => item.key === element.dataset.semesterSummary);
+    if (semester) element.textContent = renderSemesterStatus(semester);
   });
   appRoot.querySelectorAll<HTMLElement>('[data-assessment-summary]').forEach((element) => {
     const subjectId = element.dataset.assessmentSummary;
@@ -1108,6 +1137,7 @@ function fillExample(): void {
 function resetState(): void {
   state = createDefaultState();
   expandedAssessmentSubjects.clear();
+  expandedSemesters.clear();
   unexcusedAbsenceDays = 0;
   autonomousActivityScores = [3, 3, 3];
   clubActivityScores = [3, 3, 3];
